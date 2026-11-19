@@ -1,0 +1,151 @@
+name: Build OBS AI Background Filter EXE
+
+
+
+on:
+
+  workflow_dispatch:
+  
+
+
+jobs:
+
+  build:
+  
+    runs-on: windows-2025
+    
+    timeout-minutes: 180
+    
+    steps:
+    
+      - name: Checkout repository
+      
+        uses: actions/checkout@v4
+        
+      - name: Rebuild source archive
+      
+        shell: pwsh
+        
+        run: |
+        
+          cmd /c copy /b MyOBS-source.zip.part00+MyOBS-source.zip.part01 MyOBS-source.zip
+          
+          Expand-Archive -Path MyOBS-source.zip -DestinationPath extracted
+          
+          Get-ChildItem extracted -Force | Copy-Item -Destination . -Recurse -Force
+          
+          Remove-Item MyOBS-source.zip,MyOBS-source.zip.part00,MyOBS-source.zip.part01 -Force
+          
+      - name: Checkout OBS SDK submodule
+      
+        shell: pwsh
+        
+        run: |
+        
+          if (Test-Path vendor\obs-studio) { Remove-Item vendor\obs-studio -Recurse -Force }
+          
+          git clone --depth 1 --branch 29.1.3 https://github.com/obsproject/obs-studio.git vendor/obs-studio
+          
+      - name: Load Visual Studio and dependencies
+      
+        shell: pwsh
+        
+        run: |
+        
+          $launch = Join-Path (vswhere -version '[18,19)' -property installationPath) 'Common7\Tools\Launch-VsDevShell.ps1'
+          
+          & $launch -Arch amd64 -HostArch amd64 -SkipAutomaticLocation
+          
+          cmake -P scripts/download-deps.cmake
+          
+      - name: Configure
+      
+        shell: pwsh
+        
+        env:
+        
+          CMAKE_PREFIX_PATH: ${{ github.workspace }}\.deps\obs-deps;${{ github.workspace }}\.deps\obs-deps-qt6
+          
+        run: cmake -S . -B build -G 'Visual Studio 18 2026' -A x64 "-DCMAKE_PREFIX_PATH=$env:CMAKE_PREFIX_PATH" -DCMAKE_SYSTEM_VERSION=10.0.26100
+        
+      - name: Build plugin
+      
+        shell: pwsh
+        
+        run: cmake --build build --config RelWithDebInfo --parallel
+        
+      - name: Stage plugin files
+      
+        shell: pwsh
+        
+        run: cmake --install build --config RelWithDebInfo --prefix build_package\obs-studio\plugins
+        
+      - name: Install NSIS
+      
+        shell: pwsh
+        
+        run: choco install nsis --no-progress -y
+        
+      - name: Build EXE installer
+      
+        shell: pwsh
+        
+        run: makensis.exe /DPRODUCT_VERSION=0.1.0 installer\OBS-AI-Background-Filter.nsi
+        
+      - name: Upload EXE
+      
+        uses: actions/upload-artifact@v4
+        
+        with:
+        
+          name: OBS-AI-Background-Filter-Setup
+          
+          path: OBS-AI-Background-Filter-Setup.exe
+          
+          if-no-files-found: error
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
